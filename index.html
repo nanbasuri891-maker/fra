@@ -38,9 +38,9 @@
             height: 100%;
         }
         /* 
-           【改善ポイント】
-           opacity（不透明度）と visibility（表示状態）を同時にコントロールし、
-           さらに z-index（重なり順）を制御することで、裏に隠れた動画が画面を遮るのを防ぎます。
+           【Safariフリーズ対策】
+           不透明度（opacity）のみで制御します。
+           pointer-events: none にすることで、透明な動画がクリックを邪魔するのを防ぎます。
         */
         .avatar-media {
             position: absolute;
@@ -49,16 +49,12 @@
             height: 100%;
             object-fit: cover;
             opacity: 0;
-            visibility: hidden;
-            z-index: 1;
-            transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+            transition: opacity 0.8s ease-in-out; /* 0.8秒かけて滑らかにクロスフェード */
             pointer-events: none;
         }
-        /* アクティブな素材だけを一番手前に表示し、不透明にします */
+        /* アクティブな素材だけを表示します */
         .avatar-media.active { 
             opacity: 1; 
-            visibility: visible;
-            z-index: 2;
         }
         /* ===== 上部：名前・ステータス（画面上に重ねるオーバーレイ） ===== */
         .top-overlay {
@@ -215,7 +211,7 @@
 <div id="stage">
     <!-- フラ本体：画面いっぱいのVTuber表示 -->
     <div class="avatar-container" id="avatar-container">
-        <!-- 1. 静止画（初期表示） -->
+        <!-- 1. 静止画（初期状態はこれだけが active ） -->
         <img id="img-still" class="avatar-media active" src="fura_still.png" alt="フラ">
         
         <!-- 2. 通常おしゃべり動画 -->
@@ -285,11 +281,12 @@ if (SpeechRecognition) {
 startBtn.addEventListener("click", () => {
     startOverlay.classList.add("hidden");
     
-    // 静止画を非表示にし、通常動画を表示
+    // 静止画の active を外し、通常動画を active にする
     imgStill.classList.remove("active");
     videoSpeak.classList.add("active");
+    videoSmile.classList.remove("active");
     
-    // スマホでの遅延を防ぐため、通常動画と笑顔動画の両方を「ミュート状態で事前に再生開始」しておきます
+    // スマホでの遅延を防ぐため、両方の動画をバックグラウンドで再生開始させておきます
     videoSpeak.muted = true;
     videoSpeak.play().catch(err => console.log("通常動画再生エラー:", err));
     
@@ -338,7 +335,6 @@ function handleSend() {
     setTimeout(() => {
         const replyData = getFuraReply(text);
         chatBubble.innerText = replyData.text;
-        // 笑顔用の返答かどうかのフラグを渡す
         playPreGeneratedAudio(replyData.audioFile, replyData.useSmile);
     }, 800);
 }
@@ -381,14 +377,14 @@ function getFuraReply(input) {
     };
 }
 
-// 事前生成された音声を再生する関数（笑顔フラグを追加）
+// 音声を再生する関数
 function playPreGeneratedAudio(audioFilePath, useSmile = false) {
     stopSpeaking();
     statusLabel.innerText = "言葉を紡いでいます...";
     statusLabel.className = "agent-status talking";
     avatarContainer.classList.add("speaking");
     
-    // 【改善】感情に合わせて動画をクロスフェード切り替え
+    // 感情に合わせて動画をクロスフェード切り替え
     if (useSmile) {
         videoSpeak.classList.remove("active");
         videoSmile.classList.add("active");
@@ -417,7 +413,7 @@ function stopSpeaking() {
         currentAudio = null;
     }
     
-    // 話し終わったら、自動的に「通常おしゃべり動画」にクロスフェードで戻す
+    // 話し終わったら、自動的に「通常動画」に戻す
     videoSmile.classList.remove("active");
     videoSpeak.classList.add("active");
     
@@ -428,7 +424,7 @@ function stopSpeaking() {
     avatarContainer.classList.remove("speaking");
 }
 
-// 【改善】iOS Safariなどで HTMLの loop 属性が無視されてループが止まるバグを強制回避するスクリプト
+// ループが止まるバグを強制回避
 videoSpeak.addEventListener('ended', () => {
     videoSpeak.currentTime = 0;
     videoSpeak.play().catch(err => console.log("通常動画ループエラー:", err));
