@@ -304,6 +304,16 @@ if (SpeechRecognition) {
 // スタートボタンを押した時の処理
 startBtn.addEventListener("click", () => {
     startOverlay.classList.add("hidden");
+
+    // ここで動画に切り替えて、以降はずっとループさせ続ける（静止画には戻さない）
+    imgStill.classList.remove("active");
+    videoSpeak.classList.add("active");
+    videoSpeak.muted = false;
+    videoSpeak.play().catch(() => {
+        videoSpeak.muted = true;
+        videoSpeak.play();
+    });
+
     playPreGeneratedAudio("audio/welcome.mp3");
 });
 
@@ -397,13 +407,6 @@ function playPreGeneratedAudio(audioFilePath) {
 
     currentAudio = new Audio(audioFilePath);
 
-    currentAudio.onplay = () => {
-        imgStill.classList.remove("active");
-        videoSpeak.classList.add("active");
-        videoSpeak.currentTime = 0;
-        videoSpeak.play().catch(err => console.log("動画再生エラー:", err));
-    };
-
     currentAudio.onended = () => {
         stopSpeaking();
     };
@@ -425,9 +428,7 @@ function stopSpeaking() {
         currentAudio = null;
     }
 
-    videoSpeak.classList.remove("active");
-    videoSpeak.pause();
-    imgStill.classList.add("active");
+    // 動画は止めず、ずっとループさせ続ける（静止画には戻さない）
 
     actionBtn.classList.remove("recording");
     updateActionButton();
