@@ -210,13 +210,13 @@
 <div id="stage">
     <!-- フラ本体：画面いっぱいのVTuber表示 -->
     <div class="avatar-container" id="avatar-container">
-        <!-- 1. 静止画（初期状態はこれだけが active ） -->
-        <img id="img-still" class="avatar-media active" src="fura_still.png" alt="フラ">
-        
-        <!-- 2. 通常おしゃべり動画 -->
+        <!-- 1. アイドル状態（スタート前）：よこから正面の短いループ動画 -->
+        <video id="video-still" class="avatar-media active" src="fura_still.mp4" loop muted playsinline autoplay></video>
+
+        <!-- 2. 通常おしゃべり動画（はきはき正面向いて話す） -->
         <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline></video>
-        
-        <!-- 3. 笑顔おしゃべり動画（うれしい時用） -->
+
+        <!-- 3. 笑顔おしゃべり動画（うれしい時用：瞬きするまで話す） -->
         <video id="video-smile" class="avatar-media" src="fura_smile.mp4" loop muted playsinline></video>
     </div>
     <!-- 上部オーバーレイ：名前・ステータス -->
@@ -239,7 +239,7 @@
 </div>
 <audio id="welcome-dummy" style="display:none"></audio>
 <script>
-const imgStill = document.getElementById("img-still");
+const videoStill = document.getElementById("video-still");
 const videoSpeak = document.getElementById("video-speak");
 const videoSmile = document.getElementById("video-smile");
 const avatarContainer = document.getElementById("avatar-container");
@@ -250,6 +250,10 @@ const actionBtn = document.getElementById("action-btn");
 const startOverlay = document.getElementById("start-overlay");
 const startBtn = document.getElementById("start-btn");
 let currentAudio = null; // 現在再生中の音声オブジェクト
+
+// アイドル動画（よこから正面）はページ読み込み時点からバックグラウンドで再生しておく
+videoStill.muted = true;
+videoStill.play().catch(err => console.log("アイドル動画再生エラー:", err));
 
 // 音声認識の設定
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -280,8 +284,8 @@ if (SpeechRecognition) {
 startBtn.addEventListener("click", () => {
     startOverlay.classList.add("hidden");
     
-    // 静止画の active を外し、通常動画を active にする
-    imgStill.classList.remove("active");
+    // アイドル動画の active を外し、通常動画を active にする
+    videoStill.classList.remove("active");
     videoSpeak.classList.add("active");
     videoSmile.classList.remove("active");
     
