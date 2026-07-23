@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>フラ AIエージェント</title>
+    <style>
+        :root {
+            --primary-color: #2f9e8f;
+            --dark-pink: #227b6f;
+            --text-color: #2b2b2b;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #0b0f19;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+            color: var(--text-color);
+        }
+
+        /* ===== VTuber風：フラをスマホ画面いっぱいに表示するステージ ===== */
+        #stage {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            max-width: 480px;
+            max-height: 960px;
+            margin: 0 auto;
+            overflow: hidden;
+            background: #0b0f19;
+        }
+
+        .avatar-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .avatar-media {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+            pointer-events: none;
+        }
+
+        .avatar-media.active { display: block; }
+
+        /* ===== 上部：名前・ステータス（画面上に重ねるオーバーレイ） ===== */
+        .top-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 22px 24px 40px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 100%);
+            z-index: 5;
+            text-align: center;
+        }
+
+        .agent-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 4px 0;
+            letter-spacing: 0.08em;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .agent-status {
+            display: inline-block;
+            font-size: 11px;
+            color: #fff;
+            letter-spacing: 0.08em;
+            padding: 3px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.18);
+            backdrop-filter: blur(6px);
+        }
+
+        .agent-status.talking { background: rgba(255,107,139,0.35); }
+        .agent-status.listening { background: rgba(130,201,155,0.35); }
+
+        /* ===== 下部：吹き出し＋入力バー（画面下に重ねるオーバーレイ） ===== */
+        .bottom-overlay {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 40px 18px 22px;
+            background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+            z-index: 5;
+        }
+
+        .chat-bubble {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(47, 158, 143, 0.2);
+            padding: 14px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #444;
+            max-width: 100%;
+            margin-bottom: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            line-height: 1.6;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            text-align: left;
+        }
+
+        /* ===== LINE風の入力バー ===== */
+        .input-bar {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1.5px solid rgba(255,255,255,0.5);
+            border-radius: 28px;
+            padding: 6px 6px 6px 18px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .input-bar:focus-within {
+            border-color: var(--primary-color);
+        }
+
+        #user-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 14px;
+            padding: 10px 0;
+            color: var(--text-color);
+        }
+
+        #user-input::placeholder { color: #a3a3a3; }
+
+        #action-btn {
+            flex-shrink: 0;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 17px;
+            background-color: #eef2f0;
+            color: #777;
+            transition: all 0.2s ease;
+        }
+
+        #action-btn:active { transform: scale(0.92); }
+
+        #action-btn.has-text {
+            background-color: var(--primary-color);
+            color: #fff;
+        }
+
+        #action-btn.recording {
+            background-color: #82c99b;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.06); }
+            100% { transform: scale(1); }
+        }
+
+        /* ===== スタート画面（自動再生ブロック回避のオーバーレイ） ===== */
+        .start-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 15, 25, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: opacity 0.6s ease, visibility 0.6s;
+        }
+
+        .start-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .start-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(47, 158, 143, 0.4);
+            transition: all 0.3s ease;
+            letter-spacing: 0.08em;
+        }
+
+        .start-btn:hover {
+            background-color: #268d7f;
+            transform: translateY(-2px);
+        }
+
+        .start-btn:active { transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<div id="stage">
+
+    <!-- フラ本体：画面いっぱいのVTuber表示 -->
+    <div class="avatar-container" id="avatar-container">
+        <img id="img-still" class="avatar-media active" src="fura_still.png" alt="フラ">
+        <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline></video>
+    </div>
+
+    <!-- 上部オーバーレイ：名前・ステータス -->
+    <div class="top-overlay">
+        <h2 class="agent-name">フラ</h2>
+        <span class="agent-status" id="status-label">静かに寄り添っています</span>
+    </div>
+
+    <!-- 下部オーバーレイ：吹き出し＋入力バー -->
+    <div class="bottom-overlay">
+        <div class="chat-bubble" id="chat-bubble">私「フラ」は、まだ言葉になっていない感覚もそのまま一緒に見ていきます。今、少し気になっていることはありますか？</div>
+
+        <div class="input-bar">
+            <input type="text" id="user-input" placeholder="今、心や体に浮かんでいる感覚は...">
+            <button class="btn" id="action-btn" title="声で伝える">🎤</button>
+        </div>
+    </div>
+
+    <!-- スタートオーバーレイ -->
+    <div class="start-overlay" id="start-overlay">
+        <button class="start-btn" id="start-btn">フラと話す</button>
+    </div>
+
+</div>
+
+<audio id="welcome-dummy" style="display:none"></audio>
+
+<script>
+const imgStill = document.getElementById("img-still");
+const videoSpeak = document.getElementById("video-speak");
+const avatarContainer = document.getElementById("avatar-container");
+const statusLabel = document.getElementById("status-label");
+const chatBubble = document.getElementById("chat-bubble");
+const userInput = document.getElementById("user-input");
+const actionBtn = document.getElementById("action-btn");
+
+const startOverlay = document.getElementById("start-overlay");
+const startBtn = document.getElementById("start-btn");
+
+let currentAudio = null; // 現在再生中の音声オブジェクト
+
+// 音声認識の設定
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+        const speechToText = event.results[0][0].transcript;
+        userInput.value = speechToText;
+        updateActionButton();
+        handleSend();
+    };
+
+    recognition.onend = () => {
+        actionBtn.classList.remove("recording");
+        updateActionButton();
+        if (!currentAudio) {
+            statusLabel.innerText = "静かに寄り添っています";
+            statusLabel.className = "agent-status";
+        }
+    };
+} else {
+    actionBtn.style.display = "none";
+}
+
+// スタートボタンを押した時の処理
+startBtn.addEventListener("click", () => {
+    startOverlay.classList.add("hidden");
+    playPreGeneratedAudio("audio/welcome.mp3");
+});
+
+userInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") handleSend();
+});
+
+userInput.addEventListener("input", updateActionButton);
+
+function updateActionButton() {
+    if (userInput.value.trim().length > 0) {
+        actionBtn.textContent = "➤";
+        actionBtn.title = "伝える";
+        actionBtn.classList.add("has-text");
+    } else {
+        actionBtn.textContent = "🎤";
+        actionBtn.title = "声で伝える";
+        actionBtn.classList.remove("has-text");
+    }
+}
+
+actionBtn.addEventListener("click", () => {
+    if (userInput.value.trim().length > 0) {
+        handleSend();
+        return;
+    }
+
+    if (!recognition) return;
+    stopSpeaking();
+
+    actionBtn.classList.add("recording");
+    statusLabel.innerText = "あなたの声を感じています...";
+    statusLabel.className = "agent-status listening";
+    recognition.start();
+});
+
+function handleSend() {
+    const text = userInput.value.trim();
+    if (!text) return;
+
+    userInput.value = "";
+    updateActionButton();
+    chatBubble.innerText = `「...」`;
+
+    setTimeout(() => {
+        const replyData = getFuraReply(text);
+        chatBubble.innerText = replyData.text;
+        playPreGeneratedAudio(replyData.audioFile);
+    }, 800);
+}
+
+// フラのセリフと音声ファイルの紐付け
+function getFuraReply(input) {
+    if (input.includes("わからない") || input.includes("モヤモヤ") || input.includes("まよう")) {
+        return {
+            text: "わからない……、その、モヤモヤした感じ……。焦らなくて、大丈夫ですよ。その感覚は……、体のどのあたりにありますか？ 胸のあたり……、それともお腹のあたりでしょうか。",
+            audioFile: "audio/reply_unsure.mp3"
+        };
+    }
+    if (input.includes("つかれた") || input.includes("しんどい") || input.includes("だるい")) {
+        return {
+            text: "そっか……、本当にお疲れ様です。言葉にできない重さや、疲れが、そこにあるんですね。ただここに置いて……、一緒に、ふぅっと一呼吸おいてみませんか。",
+            audioFile: "audio/reply_tired.mp3"
+        };
+    }
+    if (input.includes("緊張") || input.includes("不安") || input.includes("こわい")) {
+        return {
+            text: "少し、キュッとするような……、緊張している感覚があるのですね。その感覚に『そこにいていいよ』と優しく声をかけるように……、一緒に、ただ眺めてみましょう。",
+            audioFile: "audio/reply_anxious.mp3"
+        };
+    }
+    if (input.includes("うれしい") || input.includes("たのしい") || input.includes("よかった")) {
+        return {
+            text: "ふふ……っ、温かくて軽い感覚が、広がっているのですね。その心地よさを……, 体全体で、じんわりと味わってみてください。私も、とっても嬉しいです。",
+            audioFile: "audio/reply_happy.mp3"
+        };
+    }
+    return {
+        text: "お話ししてくれて、ありがとうございます。その言葉の奥にある……、まだ形になっていない感覚を、もう少し、一緒にゆっくり感じてみましょう。どんな感じが、浮かんできますか？",
+        audioFile: "audio/reply_default.mp3"
+    };
+}
+
+// 事前生成された音声（Fish Audio等）を再生する関数
+function playPreGeneratedAudio(audioFilePath) {
+    stopSpeaking();
+
+    statusLabel.innerText = "言葉を紡いでいます...";
+    statusLabel.className = "agent-status talking";
+    avatarContainer.classList.add("speaking");
+
+    currentAudio = new Audio(audioFilePath);
+
+    currentAudio.onplay = () => {
+        imgStill.classList.remove("active");
+        videoSpeak.classList.add("active");
+        videoSpeak.currentTime = 0;
+        videoSpeak.play().catch(err => console.log("動画再生エラー:", err));
+    };
+
+    currentAudio.onended = () => {
+        stopSpeaking();
+    };
+
+    currentAudio.onerror = (err) => {
+        console.error("音声ファイルの読み込みに失敗しました:", err);
+        stopSpeaking();
+    };
+
+    currentAudio.play().catch(err => {
+        console.error("音声再生エラー:", err);
+        stopSpeaking();
+    });
+}
+
+function stopSpeaking() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+
+    videoSpeak.classList.remove("active");
+    videoSpeak.pause();
+    imgStill.classList.add("active");
+
+    actionBtn.classList.remove("recording");
+    updateActionButton();
+
+    statusLabel.innerText = "静かに寄り添っています";
+    statusLabel.className = "agent-status";
+    avatarContainer.classList.remove("speaking");
+}
+</script>
+
+</body>
+</html>
