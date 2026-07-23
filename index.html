@@ -418,9 +418,10 @@ function stopSpeaking() {
         currentAudio = null;
     }
     
-    // 話し終わったら、自動的に「通常動画」に戻す
+    // 話し終わったら、自動的に「静止画（アイドル動画）」に戻す
+    videoSpeak.classList.remove("active");
     videoSmile.classList.remove("active");
-    videoSpeak.classList.add("active");
+    videoStill.classList.add("active");
     
     actionBtn.classList.remove("recording");
     updateActionButton();
