@@ -39,8 +39,8 @@
         }
         /* 
            【改善ポイント】
-           display: none/block を廃止し、opacity と transition を使用。
-           これにより静止画から動画へ「ふわっ」と滑らかにクロスフェードし、ジャンプ現象を防ぎます。
+           opacity（不透明度）と visibility（表示状態）を同時にコントロールし、
+           さらに z-index（重なり順）を制御することで、裏に隠れた動画が画面を遮るのを防ぎます。
         */
         .avatar-media {
             position: absolute;
@@ -49,11 +49,16 @@
             height: 100%;
             object-fit: cover;
             opacity: 0;
-            transition: opacity 0.8s ease-in-out; /* 0.8秒かけて滑らかに切り替え */
+            visibility: hidden;
+            z-index: 1;
+            transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
             pointer-events: none;
         }
+        /* アクティブな素材だけを一番手前に表示し、不透明にします */
         .avatar-media.active { 
             opacity: 1; 
+            visibility: visible;
+            z-index: 2;
         }
         /* ===== 上部：名前・ステータス（画面上に重ねるオーバーレイ） ===== */
         .top-overlay {
@@ -210,196 +215,7 @@
 <div id="stage">
     <!-- フラ本体：画面いっぱいのVTuber表示 -->
     <div class="avatar-container" id="avatar-container">
-        <!-- 初期状態で静止画に active クラスを付与 -->
+        <!-- 1. 静止画 -->
         <img id="img-still" class="avatar-media active" src="fura_still.png" alt="フラ">
-        <!-- 動画は muted 属性を付与し、常に消音でループ再生させる準備をします -->
-        <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline></video>
-    </div>
-    <!-- 上部オーバーレイ：名前・ステータス -->
-    <div class="top-overlay">
-        <h2 class="agent-name">フラ</h2>
-        <span class="agent-status" id="status-label">静かに寄り添っています</span>
-    </div>
-    <!-- 下部オーバーレイ：吹き出し＋入力バー -->
-    <div class="bottom-overlay">
-        <div class="chat-bubble" id="chat-bubble">私「フラ」は、まだ言葉になっていない感覚もそのまま一緒に見ていきます。今、少し気になっていることはありますか？</div>
-        <div class="input-bar">
-            <input type="text" id="user-input" placeholder="今、心や体に浮かんでいる感覚は...">
-            <button class="btn" id="action-btn" title="声で伝える">🎤</button>
-        </div>
-    </div>
-    <!-- スタートオーバーレイ -->
-    <div class="start-overlay" id="start-overlay">
-        <button class="start-btn" id="start-btn">フラと話す</button>
-    </div>
-</div>
-<audio id="welcome-dummy" style="display:none"></audio>
-<script>
-const imgStill = document.getElementById("img-still");
-const videoSpeak = document.getElementById("video-speak");
-const avatarContainer = document.getElementById("avatar-container");
-const statusLabel = document.getElementById("status-label");
-const chatBubble = document.getElementById("chat-bubble");
-const userInput = document.getElementById("user-input");
-const actionBtn = document.getElementById("action-btn");
-const startOverlay = document.getElementById("start-overlay");
-const startBtn = document.getElementById("start-btn");
-let currentAudio = null; // 現在再生中の音声オブジェクト
-
-// 音声認識の設定
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.interimResults = false;
-    recognition.onresult = (event) => {
-        const speechToText = event.results[0][0].transcript;
-        userInput.value = speechToText;
-        updateActionButton();
-        handleSend();
-    };
-    recognition.onend = () => {
-        actionBtn.classList.remove("recording");
-        updateActionButton();
-        if (!currentAudio) {
-            statusLabel.innerText = "静かに寄り添っています";
-            statusLabel.className = "agent-status";
-        }
-    };
-} else {
-    actionBtn.style.display = "none";
-}
-
-// スタートボタンを押した時の処理
-startBtn.addEventListener("click", () => {
-    startOverlay.classList.add("hidden");
-    
-    // 【改善】静止画のactiveを外し、動画にactiveを付与（CSSのtransitionにより、0.8秒かけて滑らかにクロスフェードします）
-    imgStill.classList.remove("active");
-    videoSpeak.classList.add("active");
-    
-    // 【改善】動画は常にミュート（消音）で再生。これでスマホの音声競合によるループ停止を防ぎます。
-    videoSpeak.muted = true;
-    videoSpeak.play().catch(err => {
-        console.log("動画の自動再生に失敗しました（ブラウザ制限）:", err);
-    });
-    
-    playPreGeneratedAudio("audio/welcome.mp3");
-});
-
-userInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleSend();
-});
-userInput.addEventListener("input", updateActionButton);
-
-function updateActionButton() {
-    if (userInput.value.trim().length > 0) {
-        actionBtn.textContent = "➤";
-        actionBtn.title = "伝える";
-        actionBtn.classList.add("has-text");
-    } else {
-        actionBtn.textContent = "🎤";
-        actionBtn.title = "声で伝える";
-        actionBtn.classList.remove("has-text");
-    }
-}
-
-actionBtn.addEventListener("click", () => {
-    if (userInput.value.trim().length > 0) {
-        handleSend();
-        return;
-    }
-    if (!recognition) return;
-    stopSpeaking();
-    actionBtn.classList.add("recording");
-    statusLabel.innerText = "あなたの声を感じています...";
-    statusLabel.className = "agent-status listening";
-    recognition.start();
-});
-
-function handleSend() {
-    const text = userInput.value.trim();
-    if (!text) return;
-    userInput.value = "";
-    updateActionButton();
-    chatBubble.innerText = `「...」`;
-    setTimeout(() => {
-        const replyData = getFuraReply(text);
-        chatBubble.innerText = replyData.text;
-        playPreGeneratedAudio(replyData.audioFile);
-    }, 800);
-}
-
-// フラのセリフと音声ファイルの紐付け
-function getFuraReply(input) {
-    if (input.includes("わからない") || input.includes("モヤモヤ") || input.includes("まよう")) {
-        return {
-            text: "わからない……、その、モヤモヤした感じ……。焦らなくて、大丈夫ですよ。その感覚は……, 体のどのあたりにありますか？ 胸のあたり……、それともお腹のあたりでしょうか。",
-            audioFile: "audio/reply_unsure.mp3"
-        };
-    }
-    if (input.includes("つかれた") || input.includes("しんどい") || input.includes("だるい")) {
-        return {
-            text: "そっか……、本当にお疲れ様です。言葉にできない重さや、疲れが、そこにあるんですね。ただここに置いて……、一緒に、ふぅっと一呼吸おいてみませんか。",
-            audioFile: "audio/reply_tired.mp3"
-        };
-    }
-    if (input.includes("緊張") || input.includes("不安") || input.includes("こわい")) {
-        return {
-            text: "少し、キュッとするような……、緊張している感覚があるのですね。その感覚に『そこにいていいよ』と優しく声をかけるように……、一緒に、ただ眺めてみましょう。",
-            audioFile: "audio/reply_anxious.mp3"
-        };
-    }
-    if (input.includes("うれしい") || input.includes("たのしい") || input.includes("よかった")) {
-        return {
-            text: "ふふ……っ、温かくて軽い感覚が、広がっているのですね。その心地よさを……, 体全体で、じんわりと味わってみてください。私も、とっても嬉しいです。",
-            audioFile: "audio/reply_happy.mp3"
-        };
-    }
-    return {
-        text: "お話ししてくれて、ありがとうございます。その言葉の奥にある……、まだ形になっていない感覚を、もう少し、一緒にゆっくり感じてみましょう。どんな感じが、浮かんできますか？",
-        audioFile: "audio/reply_default.mp3"
-    };
-}
-
-// 事前生成された音声（Fish Audio等）を再生する関数
-function playPreGeneratedAudio(audioFilePath) {
-    stopSpeaking();
-    statusLabel.innerText = "言葉を紡いでいます...";
-    statusLabel.className = "agent-status talking";
-    avatarContainer.classList.add("speaking");
-    currentAudio = new Audio(audioFilePath);
-    currentAudio.onended = () => {
-        stopSpeaking();
-    };
-    currentAudio.onerror = (err) => {
-        console.error("音声ファイルの読み込みに失敗しました:", err);
-        stopSpeaking();
-    };
-    currentAudio.play().catch(err => {
-        console.error("音声再生エラー:", err);
-        stopSpeaking();
-    });
-}
-
-function stopSpeaking() {
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio = null;
-    }
-    actionBtn.classList.remove("recording");
-    updateActionButton();
-    statusLabel.innerText = "静かに寄り添っています";
-    statusLabel.className = "agent-status";
-    avatarContainer.classList.remove("speaking");
-}
-
-// 【改善】iOS Safariなどで HTMLの loop 属性が無視されてループが止まるバグを強制回避するスクリプト
-videoSpeak.addEventListener('ended', () => {
-    videoSpeak.currentTime = 0;
-    videoSpeak.play().catch(err => console.log("ループ再生エラー:", err));
-});
-</script>
-</body>
-</html>
+        <!-- 2. 通常おしゃべり動画 -->
+        <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline
