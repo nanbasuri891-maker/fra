@@ -292,8 +292,8 @@ startBtn.addEventListener("click", () => {
     videoSmile.muted = true;
     videoSmile.play().catch(err => console.log("笑顔動画再生エラー:", err));
     
-    // ★修正: audio/welcome.mp3 → welcome.mp3（実ファイルはルート直下にあるため）
-    playPreGeneratedAudio("welcome.mp3", false);
+    // audioフォルダ内の welcome.mp3 を再生
+    playPreGeneratedAudio("audio/welcome.mp3", false);
 });
 
 userInput.addEventListener("keypress", (e) => {
@@ -340,26 +340,26 @@ function handleSend() {
 }
 
 // フラのセリフと音声ファイルの紐付け
-// ★修正: すべて "audio/reply_xxx.mp3" → "audioreply_xxx.mp3"（実ファイル名に合わせた）
+// audioフォルダ内の実ファイル名（audioreply_xxx.mp3）に合わせたパス
 function getFuraReply(input) {
     if (input.includes("わからない") || input.includes("モヤモヤ") || input.includes("まよう")) {
         return {
             text: "わからない……、その、モヤモヤした感じ……。焦らなくて、大丈夫ですよ。その感覚は……、体のどのあたりにありますか？ 胸のあたり……、それともお腹のあたりでしょうか。",
-            audioFile: "audioreply_unsure.mp3",
+            audioFile: "audio/audioreply_unsure.mp3",
             useSmile: false
         };
     }
     if (input.includes("つかれた") || input.includes("しんどい") || input.includes("だるい")) {
         return {
             text: "そっか……、本当にお疲れ様です。言葉にできない重さや、疲れが、そこにあるんですね。ただここに置いて……、一緒に、ふぅっと一呼吸おいてみませんか。",
-            audioFile: "audioreply_tired.mp3",
+            audioFile: "audio/audioreply_tired.mp3",
             useSmile: false
         };
     }
     if (input.includes("緊張") || input.includes("不安") || input.includes("こわい")) {
         return {
             text: "少し、キュッとするような……、緊張している感覚があるのですね。その感覚に『そこにいていいよ』と優しく声をかけるように……、一緒に、ただ眺めてみましょう。",
-            audioFile: "audioreply_anxious.mp3",
+            audioFile: "audio/audioreply_anxious.mp3",
             useSmile: false
         };
     }
@@ -367,13 +367,13 @@ function getFuraReply(input) {
     if (input.includes("うれしい") || input.includes("たのしい") || input.includes("よかった")) {
         return {
             text: "ふふ……っ、温かくて軽い感覚が、広がっているのですね。その心地よさを……、体全体で、じんわりと味わってみてください。私も、とっても嬉しいです。",
-            audioFile: "audioreply_happy.mp3",
+            audioFile: "audio/audioreply_happy.mp3",
             useSmile: true // 笑顔動画を使用
         };
     }
     return {
         text: "お話ししてくれて、ありがとうございます。その言葉の奥にある……、まだ形になっていない感覚を、もう少し、一緒にゆっくり感じてみましょう。どんな感じが、浮かんできますか？",
-        audioFile: "audioreply_default.mp3",
+        audioFile: "audio/audioreply_default.mp3",
         useSmile: false
     };
 }
