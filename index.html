@@ -10,9 +10,7 @@
             --dark-pink: #227b6f;
             --text-color: #2b2b2b;
         }
-
         * { box-sizing: border-box; }
-
         html, body {
             margin: 0;
             height: 100%;
@@ -22,7 +20,6 @@
             font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
             color: var(--text-color);
         }
-
         /* ===== VTuber風：フラをスマホ画面いっぱいに表示するステージ ===== */
         #stage {
             position: relative;
@@ -34,26 +31,30 @@
             overflow: hidden;
             background: #0b0f19;
         }
-
         .avatar-container {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
         }
-
+        /* 
+           【改善ポイント】
+           display: none/block を廃止し、opacity と transition を使用。
+           これにより静止画から動画へ「ふわっ」と滑らかにクロスフェードし、ジャンプ現象を防ぎます。
+        */
         .avatar-media {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: none;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out; /* 0.8秒かけて滑らかに切り替え */
             pointer-events: none;
         }
-
-        .avatar-media.active { display: block; }
-
+        .avatar-media.active { 
+            opacity: 1; 
+        }
         /* ===== 上部：名前・ステータス（画面上に重ねるオーバーレイ） ===== */
         .top-overlay {
             position: absolute;
@@ -65,7 +66,6 @@
             z-index: 5;
             text-align: center;
         }
-
         .agent-name {
             font-size: 20px;
             font-weight: 600;
@@ -74,7 +74,6 @@
             letter-spacing: 0.08em;
             text-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
-
         .agent-status {
             display: inline-block;
             font-size: 11px;
@@ -85,10 +84,8 @@
             background: rgba(255,255,255,0.18);
             backdrop-filter: blur(6px);
         }
-
         .agent-status.talking { background: rgba(255,107,139,0.35); }
         .agent-status.listening { background: rgba(130,201,155,0.35); }
-
         /* ===== 下部：吹き出し＋入力バー（画面下に重ねるオーバーレイ） ===== */
         .bottom-overlay {
             position: absolute;
@@ -99,7 +96,6 @@
             background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
             z-index: 5;
         }
-
         .chat-bubble {
             background: rgba(255, 255, 255, 0.92);
             border: 1px solid rgba(47, 158, 143, 0.2);
@@ -116,7 +112,6 @@
             align-items: center;
             text-align: left;
         }
-
         /* ===== LINE風の入力バー ===== */
         .input-bar {
             display: flex;
@@ -130,11 +125,9 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
             transition: border-color 0.3s, box-shadow 0.3s;
         }
-
         .input-bar:focus-within {
             border-color: var(--primary-color);
         }
-
         #user-input {
             flex: 1;
             border: none;
@@ -144,9 +137,7 @@
             padding: 10px 0;
             color: var(--text-color);
         }
-
         #user-input::placeholder { color: #a3a3a3; }
-
         #action-btn {
             flex-shrink: 0;
             border: none;
@@ -162,26 +153,21 @@
             color: #777;
             transition: all 0.2s ease;
         }
-
         #action-btn:active { transform: scale(0.92); }
-
         #action-btn.has-text {
             background-color: var(--primary-color);
             color: #fff;
         }
-
         #action-btn.recording {
             background-color: #82c99b;
             color: white;
             animation: pulse 1.5s infinite;
         }
-
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.06); }
             100% { transform: scale(1); }
         }
-
         /* ===== スタート画面（自動再生ブロック回避のオーバーレイ） ===== */
         .start-overlay {
             position: absolute;
@@ -195,13 +181,11 @@
             z-index: 10;
             transition: opacity 0.6s ease, visibility 0.6s;
         }
-
         .start-overlay.hidden {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
         }
-
         .start-btn {
             background-color: var(--primary-color);
             color: white;
@@ -215,50 +199,41 @@
             transition: all 0.3s ease;
             letter-spacing: 0.08em;
         }
-
         .start-btn:hover {
             background-color: #268d7f;
             transform: translateY(-2px);
         }
-
         .start-btn:active { transform: translateY(0); }
     </style>
 </head>
 <body>
-
 <div id="stage">
-
     <!-- フラ本体：画面いっぱいのVTuber表示 -->
     <div class="avatar-container" id="avatar-container">
+        <!-- 初期状態で静止画に active クラスを付与 -->
         <img id="img-still" class="avatar-media active" src="fura_still.png" alt="フラ">
+        <!-- 動画は muted 属性を付与し、常に消音でループ再生させる準備をします -->
         <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline></video>
     </div>
-
     <!-- 上部オーバーレイ：名前・ステータス -->
     <div class="top-overlay">
         <h2 class="agent-name">フラ</h2>
         <span class="agent-status" id="status-label">静かに寄り添っています</span>
     </div>
-
     <!-- 下部オーバーレイ：吹き出し＋入力バー -->
     <div class="bottom-overlay">
         <div class="chat-bubble" id="chat-bubble">私「フラ」は、まだ言葉になっていない感覚もそのまま一緒に見ていきます。今、少し気になっていることはありますか？</div>
-
         <div class="input-bar">
             <input type="text" id="user-input" placeholder="今、心や体に浮かんでいる感覚は...">
             <button class="btn" id="action-btn" title="声で伝える">🎤</button>
         </div>
     </div>
-
     <!-- スタートオーバーレイ -->
     <div class="start-overlay" id="start-overlay">
         <button class="start-btn" id="start-btn">フラと話す</button>
     </div>
-
 </div>
-
 <audio id="welcome-dummy" style="display:none"></audio>
-
 <script>
 const imgStill = document.getElementById("img-still");
 const videoSpeak = document.getElementById("video-speak");
@@ -267,28 +242,23 @@ const statusLabel = document.getElementById("status-label");
 const chatBubble = document.getElementById("chat-bubble");
 const userInput = document.getElementById("user-input");
 const actionBtn = document.getElementById("action-btn");
-
 const startOverlay = document.getElementById("start-overlay");
 const startBtn = document.getElementById("start-btn");
-
 let currentAudio = null; // 現在再生中の音声オブジェクト
 
 // 音声認識の設定
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
-
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = false;
-
     recognition.onresult = (event) => {
         const speechToText = event.results[0][0].transcript;
         userInput.value = speechToText;
         updateActionButton();
         handleSend();
     };
-
     recognition.onend = () => {
         actionBtn.classList.remove("recording");
         updateActionButton();
@@ -304,23 +274,23 @@ if (SpeechRecognition) {
 // スタートボタンを押した時の処理
 startBtn.addEventListener("click", () => {
     startOverlay.classList.add("hidden");
-
-    // ここで動画に切り替えて、以降はずっとループさせ続ける（静止画には戻さない）
+    
+    // 【改善】静止画のactiveを外し、動画にactiveを付与（CSSのtransitionにより、0.8秒かけて滑らかにクロスフェードします）
     imgStill.classList.remove("active");
     videoSpeak.classList.add("active");
-    videoSpeak.muted = false;
-    videoSpeak.play().catch(() => {
-        videoSpeak.muted = true;
-        videoSpeak.play();
+    
+    // 【改善】動画は常にミュート（消音）で再生。これでスマホの音声競合によるループ停止を防ぎます。
+    videoSpeak.muted = true;
+    videoSpeak.play().catch(err => {
+        console.log("動画の自動再生に失敗しました（ブラウザ制限）:", err);
     });
-
+    
     playPreGeneratedAudio("audio/welcome.mp3");
 });
 
 userInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") handleSend();
 });
-
 userInput.addEventListener("input", updateActionButton);
 
 function updateActionButton() {
@@ -340,10 +310,8 @@ actionBtn.addEventListener("click", () => {
         handleSend();
         return;
     }
-
     if (!recognition) return;
     stopSpeaking();
-
     actionBtn.classList.add("recording");
     statusLabel.innerText = "あなたの声を感じています...";
     statusLabel.className = "agent-status listening";
@@ -353,11 +321,9 @@ actionBtn.addEventListener("click", () => {
 function handleSend() {
     const text = userInput.value.trim();
     if (!text) return;
-
     userInput.value = "";
     updateActionButton();
     chatBubble.innerText = `「...」`;
-
     setTimeout(() => {
         const replyData = getFuraReply(text);
         chatBubble.innerText = replyData.text;
@@ -369,7 +335,7 @@ function handleSend() {
 function getFuraReply(input) {
     if (input.includes("わからない") || input.includes("モヤモヤ") || input.includes("まよう")) {
         return {
-            text: "わからない……、その、モヤモヤした感じ……。焦らなくて、大丈夫ですよ。その感覚は……、体のどのあたりにありますか？ 胸のあたり……、それともお腹のあたりでしょうか。",
+            text: "わからない……、その、モヤモヤした感じ……。焦らなくて、大丈夫ですよ。その感覚は……, 体のどのあたりにありますか？ 胸のあたり……、それともお腹のあたりでしょうか。",
             audioFile: "audio/reply_unsure.mp3"
         };
     }
@@ -400,22 +366,17 @@ function getFuraReply(input) {
 // 事前生成された音声（Fish Audio等）を再生する関数
 function playPreGeneratedAudio(audioFilePath) {
     stopSpeaking();
-
     statusLabel.innerText = "言葉を紡いでいます...";
     statusLabel.className = "agent-status talking";
     avatarContainer.classList.add("speaking");
-
     currentAudio = new Audio(audioFilePath);
-
     currentAudio.onended = () => {
         stopSpeaking();
     };
-
     currentAudio.onerror = (err) => {
         console.error("音声ファイルの読み込みに失敗しました:", err);
         stopSpeaking();
     };
-
     currentAudio.play().catch(err => {
         console.error("音声再生エラー:", err);
         stopSpeaking();
@@ -427,17 +388,18 @@ function stopSpeaking() {
         currentAudio.pause();
         currentAudio = null;
     }
-
-    // 動画は止めず、ずっとループさせ続ける（静止画には戻さない）
-
     actionBtn.classList.remove("recording");
     updateActionButton();
-
     statusLabel.innerText = "静かに寄り添っています";
     statusLabel.className = "agent-status";
     avatarContainer.classList.remove("speaking");
 }
-</script>
 
+// 【改善】iOS Safariなどで HTMLの loop 属性が無視されてループが止まるバグを強制回避するスクリプト
+videoSpeak.addEventListener('ended', () => {
+    videoSpeak.currentTime = 0;
+    videoSpeak.play().catch(err => console.log("ループ再生エラー:", err));
+});
+</script>
 </body>
 </html>
