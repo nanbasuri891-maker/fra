@@ -111,6 +111,16 @@
             display: flex;
             align-items: center;
             text-align: left;
+            /* 話している間だけ表示するためのフェード制御 */
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            pointer-events: none;
+        }
+        .chat-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
         }
         /* ===== LINE風の入力バー ===== */
         .input-bar {
@@ -210,14 +220,17 @@
 <div id="stage">
     <!-- フラ本体：画面いっぱいのVTuber表示 -->
     <div class="avatar-container" id="avatar-container">
-        <!-- 1. アイドル状態（スタート前）：よこから正面の短いループ動画 -->
-        <video id="video-still" class="avatar-media active" src="fura_still.mp4" loop muted playsinline autoplay></video>
+        <!-- 待機（idle）バリエーション -->
+        <video class="avatar-media active" data-category="idle" src="fura_still.mp4" loop muted playsinline autoplay></video>
+        <video class="avatar-media" data-category="idle" src="fura_idle2.mp4" loop muted playsinline></video>
 
-        <!-- 2. 通常おしゃべり動画（はきはき正面向いて話す） -->
-        <video id="video-speak" class="avatar-media" src="fura_talk.mp4" loop muted playsinline></video>
+        <!-- 通常おしゃべり（talk）バリエーション -->
+        <video class="avatar-media" data-category="talk" src="fura_talk.mp4" loop muted playsinline></video>
+        <video class="avatar-media" data-category="talk" src="fura_talk2.mp4" loop muted playsinline></video>
 
-        <!-- 3. 笑顔おしゃべり動画（うれしい時用：瞬きするまで話す） -->
-        <video id="video-smile" class="avatar-media" src="fura_smile.mp4" loop muted playsinline></video>
+        <!-- ニッコリおしゃべり（smile）バリエーション -->
+        <video class="avatar-media" data-category="smile" src="fura_smile.mp4" loop muted playsinline></video>
+        <video class="avatar-media" data-category="smile" src="fura_smile2.mp4" loop muted playsinline></video>
     </div>
     <!-- 上部オーバーレイ：名前・ステータス -->
     <div class="top-overlay">
@@ -226,7 +239,7 @@
     </div>
     <!-- 下部オーバーレイ：吹き出し＋入力バー -->
     <div class="bottom-overlay">
-        <div class="chat-bubble" id="chat-bubble">私「フラ」は、まだ言葉になっていない感覚もそのまま一緒に見ていきます。今、少し気になっていることはありますか？</div>
+        <div class="chat-bubble" id="chat-bubble"></div>
         <div class="input-bar">
             <input type="text" id="user-input" placeholder="今、心や体に浮かんでいる感覚は...">
             <button class="btn" id="action-btn" title="声で伝える">🎤</button>
@@ -239,9 +252,44 @@
 </div>
 <audio id="welcome-dummy" style="display:none"></audio>
 <script>
-const videoStill = document.getElementById("video-still");
-const videoSpeak = document.getElementById("video-speak");
-const videoSmile = document.getElementById("video-smile");
+const allVideos = Array.from(document.querySelectorAll(".avatar-media"));
+const videoPools = {
+    idle: allVideos.filter(v => v.dataset.category === "idle"),
+    talk: allVideos.filter(v => v.dataset.category === "talk"),
+    smile: allVideos.filter(v => v.dataset.category === "smile"),
+};
+let activeVideo = videoPools.idle[0];
+let idleRotateTimer = null;
+
+// 指定カテゴリの中からランダムに1本選び、クロスフェードで切り替える
+// （直前と同じ動画が連続で選ばれるのを避ける）
+function activateVideo(category) {
+    const pool = videoPools[category];
+    if (!pool || pool.length === 0) return activeVideo;
+    let next = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1 && next === activeVideo) {
+        next = pool[(pool.indexOf(next) + 1) % pool.length];
+    }
+    allVideos.forEach(v => v.classList.remove("active"));
+    next.classList.add("active");
+    next.muted = true;
+    next.currentTime = 0;
+    next.play().catch(err => console.log("動画再生エラー:", err));
+    activeVideo = next;
+    return next;
+}
+
+// 待機中は一定間隔（9〜16秒のランダム）で待機バリエーションを自動で切り替える
+function scheduleIdleRotation() {
+    clearTimeout(idleRotateTimer);
+    const wait = 9000 + Math.random() * 7000;
+    idleRotateTimer = setTimeout(() => {
+        if (videoPools.idle.includes(activeVideo) === false) return; // 話している間は何もしない
+        activateVideo("idle");
+        scheduleIdleRotation();
+    }, wait);
+}
+
 const avatarContainer = document.getElementById("avatar-container");
 const statusLabel = document.getElementById("status-label");
 const chatBubble = document.getElementById("chat-bubble");
@@ -252,8 +300,9 @@ const startBtn = document.getElementById("start-btn");
 let currentAudio = null; // 現在再生中の音声オブジェクト
 
 // アイドル動画（よこから正面）はページ読み込み時点からバックグラウンドで再生しておく
-videoStill.muted = true;
-videoStill.play().catch(err => console.log("アイドル動画再生エラー:", err));
+videoPools.idle.forEach(v => { v.muted = true; });
+activeVideo.play().catch(err => console.log("アイドル動画再生エラー:", err));
+scheduleIdleRotation();
 
 // 音声認識の設定
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -284,20 +333,15 @@ if (SpeechRecognition) {
 startBtn.addEventListener("click", () => {
     startOverlay.classList.add("hidden");
     
-    // アイドル動画の active を外し、通常動画を active にする
-    videoStill.classList.remove("active");
-    videoSpeak.classList.add("active");
-    videoSmile.classList.remove("active");
-    
-    // スマホでの遅延を防ぐため、両方の動画をバックグラウンドで再生開始させておきます
-    videoSpeak.muted = true;
-    videoSpeak.play().catch(err => console.log("通常動画再生エラー:", err));
-    
-    videoSmile.muted = true;
-    videoSmile.play().catch(err => console.log("笑顔動画再生エラー:", err));
+    // スマホでの遅延を防ぐため、全バリエーションをバックグラウンドで再生開始させておきます
+    allVideos.forEach(v => {
+        v.muted = true;
+        v.play().catch(err => console.log("動画再生エラー:", err));
+    });
+    activateVideo("talk");
     
     // audioフォルダ内の welcome.mp3 を再生
-    playPreGeneratedAudio("audio/welcome.mp3", false);
+    playPreGeneratedAudio("audio/welcome.mp3", false, "私「フラ」は、まだ言葉になっていない感覚もそのまま一緒に見ていきます。今、少し気になっていることはありますか？");
 });
 
 userInput.addEventListener("keypress", (e) => {
@@ -335,11 +379,9 @@ function handleSend() {
     if (!text) return;
     userInput.value = "";
     updateActionButton();
-    chatBubble.innerText = `「...」`;
     setTimeout(() => {
         const replyData = getFuraReply(text);
-        chatBubble.innerText = replyData.text;
-        playPreGeneratedAudio(replyData.audioFile, replyData.useSmile);
+        playPreGeneratedAudio(replyData.audioFile, replyData.useSmile, replyData.text);
     }, 800);
 }
 
@@ -383,20 +425,20 @@ function getFuraReply(input) {
 }
 
 // 音声を再生する関数
-function playPreGeneratedAudio(audioFilePath, useSmile = false) {
+// text は「話している間だけ」吹き出しに表示する
+function playPreGeneratedAudio(audioFilePath, useSmile = false, text = "") {
     stopSpeaking();
     statusLabel.innerText = "言葉を紡いでいます...";
     statusLabel.className = "agent-status talking";
     avatarContainer.classList.add("speaking");
-    
-    // 感情に合わせて動画をクロスフェード切り替え
-    if (useSmile) {
-        videoSpeak.classList.remove("active");
-        videoSmile.classList.add("active");
-    } else {
-        videoSmile.classList.remove("active");
-        videoSpeak.classList.add("active");
-    }
+
+    // 吹き出しは「話している間」だけ表示する
+    chatBubble.innerText = text;
+    chatBubble.classList.add("visible");
+
+    // 感情カテゴリ（talk/smile）の中からランダムにバリエーションを選んでクロスフェード切り替え
+    clearTimeout(idleRotateTimer);
+    activateVideo(useSmile ? "smile" : "talk");
     
     currentAudio = new Audio(audioFilePath);
     currentAudio.onended = () => {
@@ -418,10 +460,12 @@ function stopSpeaking() {
         currentAudio = null;
     }
     
-    // 話し終わったら、自動的に「静止画（アイドル動画）」に戻す
-    videoSpeak.classList.remove("active");
-    videoSmile.classList.remove("active");
-    videoStill.classList.add("active");
+    // 話し終わったら、自動的に待機バリエーションのどれかに戻す
+    activateVideo("idle");
+    scheduleIdleRotation();
+
+    // 吹き出しも待機中は非表示にする
+    chatBubble.classList.remove("visible");
     
     actionBtn.classList.remove("recording");
     updateActionButton();
@@ -430,15 +474,12 @@ function stopSpeaking() {
     avatarContainer.classList.remove("speaking");
 }
 
-// ループが止まるバグを強制回避
-videoSpeak.addEventListener('ended', () => {
-    videoSpeak.currentTime = 0;
-    videoSpeak.play().catch(err => console.log("通常動画ループエラー:", err));
-});
-
-videoSmile.addEventListener('ended', () => {
-    videoSmile.currentTime = 0;
-    videoSmile.play().catch(err => console.log("笑顔動画ループエラー:", err));
+// ループが止まるバグを強制回避（全バリエーション共通）
+allVideos.forEach(v => {
+    v.addEventListener('ended', () => {
+        v.currentTime = 0;
+        v.play().catch(err => console.log("動画ループエラー:", err));
+    });
 });
 </script>
 </body>
